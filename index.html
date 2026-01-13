@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Feed Cowsay via Alby</title>
+<style>
+body { font-family: monospace; text-align: center; background: #f0f8ff; margin: 2em; }
+button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; }
+pre { font-size: 16px; display: inline-block; margin-top: 20px; white-space: pre; transition: transform 0.3s; }
+pre.eating { transform: translateY(-10px) rotate(-5deg); }
+#quote { margin-top: 20px; font-size: 18px; font-weight: bold; }
+#meterContainer { margin-top: 15px; width: 300px; height: 20px; border: 2px solid #333; margin-left:auto; margin-right:auto; }
+#meter { height: 100%; width: 0%; background: #4caf50; }
+#collection { margin-top: 30px; text-align: left; max-width: 600px; margin-left:auto; margin-right:auto; }
+.cow-item { margin-bottom: 10px; border-bottom: 1px dashed #999; padding-bottom: 5px; }
+.export-btn { margin-top: 10px; padding: 6px 12px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Feed Cowsay & Collect Digital Cards!</h1>
+<button id="feedBtn">Feed Cowsay (1 satoshi via Alby)</button>
+
+<pre id="cow">
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+</pre>
+<p id="quote"></p>
+<button class="export-btn" id="shareBtn">Generate Shareable Card</button>
+
+<div id="meterContainer"><div id="meter"></div></div>
+<h2>Your Cow Collection</h2>
+<div id="collection"></div>
+
+<script>
+// ----- Cow personas -----
+const cowPersonas = [
+  { name: "Bessie Braveheart", personality: "brave", color: "#ffb347" },
+  { name: "Moozart", personality: "creative", color: "#ff6f91" },
+  { name: "Sir Loin", personality: "noble", color: "#6a5acd" },
+  { name: "Dreamy Daisy", personality: "dreamy", color: "#4dd0e1" },
+  { name: "Chucklehoof", personality: "humorous", color: "#ffcc5c" },
+  { name: "Oracle Oink", personality: "wise", color: "#a1c349" }
+];
+
+const cowVariants = [
+`        \\   ^__^
+         \\  (oo)\\_______
+            (__)\       )\\/\\
+                ||----w |
+                ||     ||`,
+`        \\   ^__^
+         \\  (oo)\\_____/\\
+            (__)\      )\\/\\
+                ||--w-||
+                ||    ||`,
+`        \\   ^__^
+         \\  (oo)\\______
+            (__)\      )\\/\\
+                ||----||
+                ||    ||`
+];
+
+// Quote generator
+function generateQuote(personality) {
+    const templates = {
+        brave: ["Courage is not the absence of fear, but taking the next step despite it.","A brave heart makes every pasture feel like home.","Leap boldly; the field is wide and forgiving."],
+        creative: ["Imagination turns every cowbell into music.","Paint your dreams across the meadow.","Even a moo can inspire a symphony."],
+        noble: ["Honor guides my hooves more than the grass beneath.","A noble heart respects all creatures, great and small.","Carry yourself with grace, even in mud."],
+        dreamy: ["Clouds make good pillows for thought.","Let your mind wander, the pasture awaits.","Stars guide those who sleep with one eye open."],
+        humorous: ["I find milk in every misstep.","Why did the cow cross the playground? To get to the udder side!","Laughing burns calories, but not enough for dessert."],
+        wise: ["Knowledge is grazing slowly across many fields.","Patience turns the tiniest grass into a feast.","Listen, observe, then moo."]
+    };
+    const options = templates[personality] || ["Moo!"];
+    return options[Math.floor(Math.random() * options.length)];
+}
+
+// ----- Collection & meter -----
+let collection = JSON.parse(localStorage.getItem('cowCollection') || "[]");
+let feedCount = parseInt(localStorage.getItem('feedCount') || "0");
+const unlockThreshold = 5;
+
+function updateMeter() {
+    const percent = (feedCount % unlockThreshold) / unlockThreshold * 100;
+    document.getElementById('meter').style.width = percent + "%";
+}
+
+function renderCollection() {
+    const colDiv = document.getElementById('collection');
+    colDiv.innerHTML = '';
+    collection.forEach((item) => {
+        const div = document.createElement('div');
+        div.className = "cow-item";
+        div.innerHTML = `<pre>${item.cow}</pre><div><strong>${item.name}</strong> (${item.personality})<br>${item.quote}</div>`;
+        colDiv.appendChild(div);
+    });
+}
+
+// ----- Feed cow via Alby / WebLN -----
+async function feedCowViaAlby() {
+    if(!window.webln) return alert("Please install a WebLN wallet like Alby.");
+    try {
+        await window.webln.enable(); // ask permission
+        await window.webln.sendPayment("lnurl:mike@wallet.yakihonne.com?amount=1"); // auto-settled
+        showCowFeed();
+    } catch(e) {
+        console.error(e);
+        alert("Payment failed or cancelled.");
+    }
+}
+
+function showCowFeed() {
+    const cowEl = document.getElementById('cow');
+    const quoteEl = document.getElementById('quote');
+    cowEl.classList.add('eating');
+    quoteEl.innerText = '';
+
+    setTimeout(() => {
+        cowEl.classList.remove('eating');
+        const persona = cowPersonas[Math.floor(Math.random() * cowPersonas.length)];
+        const asciiCow = cowVariants[Math.floor(Math.random() * cowVariants.length)];
+        const quote = generateQuote(persona.personality);
+
+        cowEl.textContent = asciiCow;
+        quoteEl.innerText = quote;
+
+        const card = { cow: asciiCow, name: persona.name, personality: persona.personality, color: persona.color, quote };
+        collection.push(card);
+        localStorage.setItem('cowCollection', JSON.stringify(collection));
+
+        feedCount++;
+        localStorage.setItem('feedCount', feedCount);
+
+        updateMeter();
+        renderCollection();
+    }, 1000);
+}
+
+// ----- Export card -----
+document.getElementById('shareBtn').onclick = function() {
+    if(collection.length === 0) return alert("Feed the cow first!");
+    const card = collection[collection.length - 1];
+    const canvas = document.createElement('canvas');
+    canvas.width = 500; canvas.height = 400;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = card.color + "33";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = card.color;
+    ctx.lineWidth = 8;
+    ctx.strokeRect(0,0,canvas.width,canvas.height);
+
+    ctx.fillStyle = "#000";
+    ctx.font = "16px monospace";
+    card.cow.split('\n').forEach((line,i)=>ctx.fillText(line,20,50+i*18));
+
+    ctx.fillStyle = "#333";
+    ctx.font = "20px monospace";
+    ctx.fillText(card.name + " (" + card.personality + ")", 20, 50 + card.cow.split('\n').length*18 + 25);
+
+    ctx.font = "18px monospace";
+    ctx.fillText(card.quote, 20, 50 + card.cow.split('\n').length*18 + 55);
+
+    ctx.fillStyle = "#FFD700";
+    for(let i=0;i<10;i++){ ctx.fillText("★",400-i*20,30+(i%5)*15); }
+
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = card.name.replace(/\s+/g,'_')+".png";
+    a.click();
+}
+
+// ----- Feed button -----
+document.getElementById('feedBtn').onclick = feedCowViaAlby;
+
+// ----- Initialize -----
+updateMeter();
+renderCollection();
+</script>
+</body>
+</html>
